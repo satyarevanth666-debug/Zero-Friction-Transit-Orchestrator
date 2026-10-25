@@ -43,12 +43,23 @@ def create_app() -> FastAPI:
         description="Unified multi-modal transit planning API for India with honest data quality guarantees.",
         version="0.1.0",
         lifespan=lifespan,
-        docs_url="/api/docs" if not settings.is_production else None,
-        redoc_url="/api/redoc" if not settings.is_production else None,
+        docs_url="/api/docs",
+        redoc_url="/api/redoc",
     )
 
     # State & Rate Limiter
     app.state.limiter = limiter
+
+    @app.get("/")
+    def root():
+        return {
+            "name": "Zero-Friction Transit Orchestrator API",
+            "status": "online",
+            "version": "0.1.0",
+            "health": "/api/health",
+            "docs": "/api/docs",
+            "message": "Zero-Friction Transit API is live. Use the frontend web app or POST /api/plan/sync to search journeys.",
+        }
 
     @app.exception_handler(RateLimitExceeded)
     async def rate_limit_handler(request: Request, exc: RateLimitExceeded) -> JSONResponse:
