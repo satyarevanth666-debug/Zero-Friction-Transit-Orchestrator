@@ -103,21 +103,45 @@ def plan_sync(req: PlanRequest, db: Session = Depends(get_db)) -> ItineraryRespo
                 itin.budget_verified = total_fare <= intent.budget
     from app.config import settings
     from app.providers.rail_availability import RailAvailabilityProvider
+    from app.providers.bus_availability import BusAvailabilityProvider
+    from app.providers.flights_airlabs import FlightAirLabsProvider
 
-    # Query Live Rail API and verified trains when enabled
-    if settings.ENABLE_THIRD_PARTY_RAIL or len(itineraries) == 0:
-        rail_prov = RailAvailabilityProvider(
-            api_key=settings.RAIL_API_KEY,
-            enabled=True,
-        )
-        rail_itins = rail_prov.fetch_dynamic(intent)
-        if rail_itins:
-            existing_numbers = {
-                leg.service_number for it in itineraries for leg in it.legs
-            }
-            for rit in rail_itins:
-                if not any(leg.service_number in existing_numbers for leg in rit.legs):
-                    itineraries.append(rit)
+    existing_numbers = {
+        leg.service_number for it in itineraries for leg in it.legs
+    }
+
+    # 1. Query Live Rail API and verified corridor train timetables
+    rail_prov = RailAvailabilityProvider(
+        api_key=settings.RAIL_API_KEY,
+        enabled=True,
+    )
+    rail_itins = rail_prov.fetch_dynamic(intent)
+    for rit in rail_itins:
+        if not any(leg.service_number in existing_numbers for leg in rit.legs):
+            itineraries.append(rit)
+            for leg in rit.legs:
+                existing_numbers.add(leg.service_number)
+
+    # 2. Query Verified State RTC & intercity bus networks
+    bus_prov = BusAvailabilityProvider(enabled=True)
+    bus_itins = bus_prov.fetch_dynamic(intent)
+    for bit in bus_itins:
+        if not any(leg.service_number in existing_numbers for leg in bit.legs):
+            itineraries.append(bit)
+            for leg in bit.legs:
+                existing_numbers.add(leg.service_number)
+
+    # 3. Query Live AirLabs Flight API & verified domestic flight schedules
+    flight_prov = FlightAirLabsProvider(
+        api_key=settings.FLIGHT_API_KEY,
+        enabled=True,
+    )
+    flight_itins = flight_prov.fetch_dynamic(intent)
+    for fit in flight_itins:
+        if not any(leg.service_number in existing_numbers for leg in fit.legs):
+            itineraries.append(fit)
+            for leg in fit.legs:
+                existing_numbers.add(leg.service_number)
 
     ranker = ItineraryRanker()
     elapsed_ms = round((time.monotonic() - t0) * 1000, 2)
