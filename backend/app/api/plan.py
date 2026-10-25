@@ -73,8 +73,12 @@ def plan_sync(req: PlanRequest, db: Session = Depends(get_db)) -> ItineraryRespo
 
     from app.providers.fares_estimated import EstimatedFareProvider
 
-    router_engine = RaptorRouter(db)
-    itineraries = router_engine.plan(intent)
+    try:
+        router_engine = RaptorRouter(db)
+        itineraries = router_engine.plan(intent)
+    except Exception as e:
+        logger.warning(f"Raptor router note: {e}")
+        itineraries = []
 
     # Enrich legs with accurate fares and truth levels
     fare_provider = EstimatedFareProvider()

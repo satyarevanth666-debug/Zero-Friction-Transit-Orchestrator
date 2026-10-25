@@ -32,6 +32,13 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         logger.critical("Fatal: JWT_SECRET must be at least 32 characters in production.")
         raise RuntimeError("JWT_SECRET must be at least 32 characters in production.")
 
+    try:
+        from app.db.seed import seed_database
+        seed_database()
+        logger.info("Database initialized and baseline geography seeded.")
+    except Exception as e:
+        logger.warning(f"Database seed initialization note: {e}")
+
     yield
     logger.info("Application shutting down")
 
