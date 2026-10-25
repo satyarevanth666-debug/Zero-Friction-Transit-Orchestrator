@@ -1,0 +1,57 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: zero-friction-backend
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    environment:
+      - APP_ENV=production
+      - DATABASE_URL=sqlite:///./zero_friction_transit.db
+      - JWT_SECRET=production_secret_key_must_be_over_32_characters_long_for_security
+      - ACCESS_TOKEN_MINUTES=15
+      - REFRESH_TOKEN_DAYS=7
+      - FRONTEND_ORIGIN=http://localhost:3000
+      - COOKIE_SECURE=false
+      - OLLAMA_BASE_URL=http://ollama:11434
+      - LLM_MODEL=qwen2.5:7b-instruct
+      - LLM_ENABLED=true
+      - TIMEZONE=Asia/Kolkata
+    volumes:
+      - ./backend/zero_friction_transit.db:/app/zero_friction_transit.db
+      - ./data:/app/data
+    depends_on:
+      - ollama
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: zero-friction-frontend
+    ports:
+      - "3000:3000"
+    env_file:
+      - .env
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost:8000/api
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: zero-friction-ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    restart: unless-stopped
+
+volumes:
+  ollama_data:

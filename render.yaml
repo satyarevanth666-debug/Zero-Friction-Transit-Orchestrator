@@ -1,0 +1,46 @@
+services:
+  # 1. FastAPI Python Backend Service
+  - type: web
+    name: zero-friction-backend
+    env: python
+    rootDir: backend
+    buildCommand: "pip install --upgrade pip && pip install ."
+    startCommand: "uvicorn app.main:app --host 0.0.0.0 --port $PORT"
+    envVars:
+      - key: APP_ENV
+        value: production
+      - key: DATABASE_URL
+        value: sqlite:///./zero_friction_transit.db
+      - key: JWT_SECRET
+        generateValue: true
+      - key: ACCESS_TOKEN_MINUTES
+        value: "15"
+      - key: REFRESH_TOKEN_DAYS
+        value: "7"
+      - key: TIMEZONE
+        value: "Asia/Kolkata"
+      - key: ENABLE_THIRD_PARTY_RAIL
+        value: "true"
+      - key: RAIL_API_KEY
+        sync: false
+      - key: FLIGHT_PROVIDER
+        value: "airlabs"
+      - key: FLIGHT_API_KEY
+        sync: false
+      - key: FRONTEND_ORIGIN
+        sync: false
+      - key: COOKIE_SECURE
+        value: "true"
+
+  # 2. Next.js 14 Frontend Service
+  - type: web
+    name: zero-friction-frontend
+    env: node
+    rootDir: frontend
+    buildCommand: "npm install && npm run build"
+    startCommand: "node .next/standalone/server.js"
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: NEXT_PUBLIC_API_URL
+        sync: false

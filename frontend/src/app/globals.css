@@ -1,0 +1,98 @@
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  /* Crisp, bright, elegant light theme */
+  --background: #FAFCFF;
+  --foreground: #0F172A;
+  --surface: #FFFFFF;
+  --surface-2: #F1F5F9;
+  --surface-3: #E2E8F0;
+  --border: #E2E8F0;
+  --border-subtle: #EEF2F6;
+  --muted: #475569;
+  --muted-foreground: #94A3B8;
+
+  /* Sophisticated, trustworthy Royal Indigo / Blue - never muddy */
+  --brand-primary: #2563EB;
+  --brand-primary-hover: #1D4ED8;
+  --brand-primary-subtle: #EFF6FF;
+  --brand-accent: #0D9488;
+
+  --status-success: #059669;
+  --status-warning: #D97706;
+  --status-danger: #E11D48;
+  --status-info: #0284C7;
+
+  --mode-train: #2563EB;
+  --mode-bus: #0D9488;
+  --mode-flight: #0284C7;
+  --mode-transfer: #64748B;
+}
+
+/* Enforce pure, refreshing light mode */
+.dark, :root[class~="dark"] {
+  --background: #FAFCFF;
+  --foreground: #0F172A;
+  --surface: #FFFFFF;
+  --surface-2: #F1F5F9;
+  --surface-3: #E2E8F0;
+  --border: #E2E8F0;
+  --border-subtle: #EEF2F6;
+  --muted: #475569;
+  --muted-foreground: #94A3B8;
+
+  --brand-primary: #2563EB;
+  --brand-primary-hover: #1D4ED8;
+  --brand-primary-subtle: #EFF6FF;
+  --brand-accent: #0D9488;
+
+  --status-success: #059669;
+  --status-warning: #D97706;
+  --status-danger: #E11D48;
+  --status-info: #0284C7;
+
+  --mode-train: #2563EB;
+  --mode-bus: #0D9488;
+  --mode-flight: #0284C7;
+  --mode-transfer: #64748B;
+}
+
+body {
+  background-color: var(--background);
+  color: var(--foreground);
+  font-family: "Plus Jakarta Sans", -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, sans-serif;
+  font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  min-height: 100vh;
+  letter-spacing: -0.01em;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Tabular figures for consistent numerical alignment in prices and departure times */
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Subtle, airy ambient light glow for Hero */
+.hero-glow {
+  background: radial-gradient(
+    circle at 50% -10%,
+    rgba(37, 99, 235, 0.07) 0%,
+    rgba(13, 148, 136, 0.04) 35%,
+    rgba(250, 252, 255, 0) 70%
+  );
+}
+
+/* Hatched pattern for layover segments */
+.bg-hatched {
+  background-image: repeating-linear-gradient(
+    45deg,
+    rgba(148, 163, 184, 0.18),
+    rgba(148, 163, 184, 0.18) 6px,
+    transparent 6px,
+    transparent 12px
+  );
+}

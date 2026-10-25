@@ -1,0 +1,58 @@
+# Configuration for Transit Data Providers
+providers:
+  - id: gtfs_rail
+    name: "Indian Railways Community GTFS"
+    mode: rail
+    truth_level: COMMUNITY_GTFS
+    license: "ODbL / Community Verified"
+    enabled: true
+    source_type: gtfs_zip
+    file_path: "data/fixtures/gtfs_rail.zip"
+    valid_from: "2026-01-01"
+    valid_to: "2026-12-31"
+
+  - id: gtfs_bus_apsrtc
+    name: "APSRTC Regional Bus Timetable"
+    mode: bus
+    truth_level: COMMUNITY_GTFS
+    license: "CC-BY 4.0 / Open Transit Data"
+    enabled: true
+    source_type: gtfs_zip
+    file_path: "data/fixtures/gtfs_bus_apsrtc.zip"
+    valid_from: "2026-01-01"
+    valid_to: "2026-12-31"
+
+  - id: official_rail
+    name: "Railway Board 'Trains at a Glance'"
+    mode: rail
+    truth_level: OFFICIAL_TIMETABLE
+    license: "Government of India / Open Access"
+    enabled: false
+    source_type: official_timetable
+    file_path: "data/raw/trains_at_a_glance.csv"
+
+  - id: flights_mock
+    name: "Pluggable Aviation Flight Adapter"
+    mode: flight
+    truth_level: ESTIMATED
+    license: "Developer Free Tier"
+    enabled: true
+    source_type: flight_schedule
+    api_endpoint: "https://api.airlabs.co/v9"
+
+  - id: rail_availability
+    name: "Third-Party Rail Live Status"
+    mode: rail
+    truth_level: LIVE_API
+    license: "Commercial / Proprietary"
+    enabled: false
+    source_type: rail_api
+
+  - id: fares_estimated
+    name: "Indian Railways Telescopic Distance Fares"
+    mode: all
+    truth_level: ESTIMATED
+    license: "Public Railway Tariff Rules"
+    enabled: true
+    source_type: rules_yaml
+    file_path: "data/fares.yaml"

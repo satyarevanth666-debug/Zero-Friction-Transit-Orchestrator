@@ -1,0 +1,32 @@
+{
+  "nav": {
+    "plan": "Plan",
+    "saved": "Saved",
+    "dataSources": "Data sources",
+    "login": "Login",
+    "logout": "Log out",
+    "profile": "Profile",
+    "settings": "Settings"
+  },
+  "hero": {
+    "headline": "Tell us where. We'll sort the how.",
+    "subtext": "One sentence. Trains, buses and flights, combined.",
+    "placeholder": "e.g. Find me a combined train and bus route home for Friday evening under ₹800",
+    "cta": "Plan my trip",
+    "returnTrip": "Return trip",
+    "passengers": "Passengers"
+  },
+  "trust": {
+    "realData": "Real timetables where available",
+    "honest": "No guessing, unknown stays unknown",
+    "nationwide": "Works across India"
+  },
+  "howItWorks": {
+    "step1": "Type naturally",
+    "step1Desc": "Speak or write your journey in plain language with your preferred budget and timing.",
+    "step2": "We combine options",
+    "step2Desc": "Deterministic RAPTOR rounds stitch trains, buses, and flights with realistic transfers.",
+    "step3": "You choose the best",
+    "step3Desc": "Compare by balance, cost, speed, or reliability with honest data truth labels."
+  }
+}

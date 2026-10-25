@@ -1,0 +1,74 @@
+# Distance-based and class-based fare estimation rules
+# Source Citation: Indian Railways Coaching Tariff No. 26 Part I (Vol II) & APSRTC Fare Revision Notifications
+citation: "Indian Railways Coaching Tariff & State Road Transport Corporation Published Slabs"
+
+rail_fares:
+  # Base telescopic rates per km (INR)
+  sleeper:
+    base_fare: 120
+    rate_per_km: 0.38
+    min_distance: 100
+  third_ac:
+    base_fare: 440
+    rate_per_km: 1.10
+    min_distance: 100
+  second_ac:
+    base_fare: 650
+    rate_per_km: 1.60
+    min_distance: 100
+  first_ac:
+    base_fare: 1100
+    rate_per_km: 2.70
+    min_distance: 100
+  second_seating:
+    base_fare: 45
+    rate_per_km: 0.22
+    min_distance: 50
+  chair_car:
+    base_fare: 220
+    rate_per_km: 0.90
+    min_distance: 100
+
+bus_fares:
+  express:
+    base_fare: 35
+    rate_per_km: 1.05
+  ultra_deluxe:
+    base_fare: 50
+    rate_per_km: 1.35
+  super_luxury:
+    base_fare: 65
+    rate_per_km: 1.65
+  garuda_ac:
+    base_fare: 110
+    rate_per_km: 2.20
+  amaravathi_multi_axle:
+    base_fare: 140
+    rate_per_km: 2.50
+
+fixed_corridor_overrides:
+  # Specific known verified sample fares between major hubs
+  - origin: "BZA"
+    destination: "DMM"
+    mode: rail
+    class: SL
+    amount: 320
+    truth_level: OFFICIAL_TIMETABLE
+  - origin: "BZA"
+    destination: "DMM"
+    mode: rail
+    class: 3A
+    amount: 860
+    truth_level: OFFICIAL_TIMETABLE
+  - origin: "BZA"
+    destination: "ATP"
+    mode: bus
+    class: super_luxury
+    amount: 520
+    truth_level: COMMUNITY_GTFS
+  - origin: "ATP"
+    destination: "DMM"
+    mode: bus
+    class: express
+    amount: 70
+    truth_level: COMMUNITY_GTFS

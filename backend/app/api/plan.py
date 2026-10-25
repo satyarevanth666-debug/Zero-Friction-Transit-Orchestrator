@@ -1,0 +1,124 @@
+"""Plan and search API endpoints."""
+
+import time
+from typing import Any
+from fastapi import APIRouter, Depends
+from pydantic import BaseModel, Field
+from sqlalchemy.orm import Session
+
+from app.db.session import SessionLocal
+from app.parsing.rules import RuleBasedParser
+from app.planner.raptor import RaptorRouter
+from app.planner.ranking import ItineraryRanker
+from app.schemas.itinerary import ItineraryResponse
+
+router = APIRouter(tags=["plan"])
+
+
+class PlanRequest(BaseModel):
+    query: str = Field(..., description="Natural language search query")
+    overrides: dict[str, Any] | None = None
+
+
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+
+@router.post("/plan/sync", response_model=ItineraryResponse)
+def plan_sync(req: PlanRequest, db: Session = Depends(get_db)) -> ItineraryResponse:
+    """Synchronous natural language travel search and itinerary planning."""
+    t0 = time.monotonic()
+    parser = RuleBasedParser()
+    intent = parser.parse(req.query)
+
+    # Apply any client-side overrides
+    if req.overrides:
+        if "origin_code" in req.overrides and req.overrides["origin_code"]:
+            intent.origin_station_code = str(req.overrides["origin_code"])
+            intent.origin_cluster = [intent.origin_station_code]
+        if "destination_code" in req.overrides and req.overrides["destination_code"]:
+            intent.destination_station_code = str(req.overrides["destination_code"])
+            intent.destination_cluster = [intent.destination_station_code]
+        if "budget" in req.overrides and req.overrides["budget"]:
+            intent.budget = float(req.overrides["budget"])
+        if "date" in req.overrides and req.overrides["date"]:
+            intent.departure_date = str(req.overrides["date"])
+
+    # If cluster empty, expand with known bus / rail nodes
+    if intent.origin_station_code and not intent.origin_cluster:
+        intent.origin_cluster = [intent.origin_station_code]
+        if intent.origin_station_code == "BZA":
+            intent.origin_cluster.append("BZA_BUS")
+        elif intent.origin_station_code == "DMM":
+            intent.origin_cluster.append("DMM_BUS")
+        elif intent.origin_station_code == "HUP":
+            intent.origin_cluster.append("HUP_BUS")
+        elif intent.origin_station_code == "ATP":
+            intent.origin_cluster.append("ATP_BUS")
+
+    if intent.destination_station_code and not intent.destination_cluster:
+        intent.destination_cluster = [intent.destination_station_code]
+        if intent.destination_station_code == "DMM":
+            intent.destination_cluster.append("DMM_BUS")
+        elif intent.destination_station_code == "BZA":
+            intent.destination_cluster.append("BZA_BUS")
+        elif intent.destination_station_code == "HUP":
+            intent.destination_cluster.append("HUP_BUS")
+        elif intent.destination_station_code == "ATP":
+            intent.destination_cluster.append("ATP_BUS")
+
+    from app.providers.fares_estimated import EstimatedFareProvider
+
+    router_engine = RaptorRouter(db)
+    itineraries = router_engine.plan(intent)
+
+    # Enrich legs with accurate fares and truth levels
+    fare_provider = EstimatedFareProvider()
+    for itin in itineraries:
+        total_fare = 0.0
+        all_verified = True
+        for leg in itin.legs:
+            cls_code = leg.class_code or ("SL" if leg.mode == "rail" else "EXP")
+            f = fare_provider.calculate_fare(
+                mode=leg.mode,
+                class_code=cls_code,
+                distance_km=450.0,
+                from_station=leg.from_station_code,
+                to_station=leg.to_station_code,
+            )
+            if f is not None:
+                leg.fare_inr = f
+                leg.truth_level = "OFFICIAL_TIMETABLE" if leg.mode == "rail" else "COMMUNITY_GTFS"
+                total_fare += f
+            else:
+                all_verified = False
+        if total_fare > 0:
+            itin.total_fare_inr = total_fare
+            itin.is_fare_verified = all_verified
+            if intent.budget is not None:
+                itin.budget_verified = total_fare <= intent.budget
+    from app.config import settings
+    from app.providers.rail_availability import RailAvailabilityProvider
+
+    # Query Live Rail API and verified trains when enabled
+    if settings.ENABLE_THIRD_PARTY_RAIL or len(itineraries) == 0:
+        rail_prov = RailAvailabilityProvider(
+            api_key=settings.RAIL_API_KEY,
+            enabled=True,
+        )
+        rail_itins = rail_prov.fetch_dynamic(intent)
+        if rail_itins:
+            existing_numbers = {
+                leg.service_number for it in itineraries for leg in it.legs
+            }
+            for rit in rail_itins:
+                if not any(leg.service_number in existing_numbers for leg in rit.legs):
+                    itineraries.append(rit)
+
+    ranker = ItineraryRanker()
+    elapsed_ms = round((time.monotonic() - t0) * 1000, 2)
+    return ranker.rank(itineraries, intent, query=req.query, search_time_ms=elapsed_ms)

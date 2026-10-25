@@ -1,0 +1,21 @@
+{
+  "name": "Zero-Friction Transit Orchestrator",
+  "short_name": "Transit Orchestrator",
+  "description": "Deterministic unified multi-modal regional and intercity transit planner for India.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0B1020",
+  "theme_color": "#4F46E5",
+  "icons": [
+    {
+      "src": "/icons/icon-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/icons/icon-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
