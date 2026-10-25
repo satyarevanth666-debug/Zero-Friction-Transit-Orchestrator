@@ -74,6 +74,8 @@ interface VerifiedRouteItem {
   seatClass: string;
   stops: string;
   statusText: string;
+  sourceLabel?: string;
+  fareSourceLabel?: string;
   thumbnail: string;
   isVerified: boolean;
 }
@@ -138,12 +140,25 @@ interface DemoItinerary {
   layover?: DemoLayover;
 }
 
+export function getPlanSearchUrl(apiBaseUrl?: string): string {
+  const baseUrl = (apiBaseUrl || "http://localhost:8000")
+    .replace(/\/+$/, "")
+    .replace(/\/api$/i, "");
+  return `${baseUrl}/api/plan/sync`;
+}
+
 export function SearchHero() {
+  const today = new Date();
+  const todayISODate = [
+    today.getFullYear(),
+    String(today.getMonth() + 1).padStart(2, "0"),
+    String(today.getDate()).padStart(2, "0"),
+  ].join("-");
   const [fromCity, setFromCity] = useState("Vijayawada");
   const [fromCode, setFromCode] = useState("BZA");
   const [toCity, setToCity] = useState("Dharmavaram");
   const [toCode, setToCode] = useState("DMM");
-  const [travelDate, setTravelDate] = useState("Fri, 16 May 2025");
+  const [travelDate, setTravelDate] = useState(todayISODate);
   const [passengerCount, setPassengerCount] = useState(1);
   const [selectedModes, setSelectedModes] = useState<("rail" | "bus" | "flight")[]>([
     "rail",
@@ -153,6 +168,7 @@ export function SearchHero() {
 
   const [naturalQuery, setNaturalQuery] = useState("Vijayawada to Dharmavaram upcoming Friday");
   const [isSearching, setIsSearching] = useState(false);
+  const [searchError, setSearchError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"Best Balance" | "Fastest" | "Cheapest" | "Most Reliable">("Best Balance");
   const [verifiedRoutesTab, setVerifiedRoutesTab] = useState<"rail" | "bus" | "flight">("rail");
 
@@ -177,6 +193,8 @@ export function SearchHero() {
 
   // Generate verified route items dynamically based on the current from/to cities and the selected tab (Trains / Buses / Flights)
   const getVerifiedRoutesList = (): VerifiedRouteItem[] => {
+    if (!backendPlanData) return [];
+
     const fLower = fromCity.toLowerCase();
     const tLower = toCity.toLowerCase();
     const isHydMas = fLower.includes("hyderabad") || tLower.includes("chennai") || fromCode === "HYB" || toCode === "MAS";
@@ -200,20 +218,22 @@ export function SearchHero() {
               trainMap.set(leg.service_number, {
                 id: `rail-${leg.service_number}`,
                 mode: "rail",
-                operator: leg.operator || "Indian Railways (SCR)",
+                operator: leg.operator || "Operator not provided",
                 serviceNumber: leg.service_number,
-                serviceName: leg.service_name || "Express",
-                fromStation: `${leg.from_station_name || fromCity} (${leg.from_station_code || fromCode})`,
-                toStation: `${leg.to_station_name || toCity} (${leg.to_station_code || toCode})`,
-                depTime: `${leg.departure_time ? leg.departure_time.slice(0, 5) : "06:00"} – ${leg.arrival_time ? leg.arrival_time.slice(0, 5) : "12:00"}`,
-                arrTime: leg.arrival_time ? leg.arrival_time.slice(0, 5) : "12:00",
-                duration: `${Math.floor((leg.duration_minutes || 360) / 60)}h ${(leg.duration_minutes || 360) % 60}m · Direct`,
-                fare: leg.fare_inr || 320,
-                seatClass: leg.class_code === "3A" ? "AC 3 Tier (3A)" : leg.class_code === "CC" ? "AC Chair Car (CC)" : "Sleeper (SL)",
-                stops: "Direct",
-                statusText: leg.availability_status ? (leg.availability_status === "CNF" ? "Available (Confirmed)" : leg.availability_status) : "Confirmed Live",
+                serviceName: leg.service_name || "Service name unavailable",
+                fromStation: `${leg.from_station_name || "Station unavailable"} (${leg.from_station_code || "—"})`,
+                toStation: `${leg.to_station_name || "Station unavailable"} (${leg.to_station_code || "—"})`,
+                depTime: `${leg.departure_time ? leg.departure_time.slice(0, 5) : "Time unavailable"} – ${leg.arrival_time ? leg.arrival_time.slice(0, 5) : "Time unavailable"}`,
+                arrTime: leg.arrival_time ? leg.arrival_time.slice(0, 5) : "Time unavailable",
+                duration: leg.duration_minutes != null ? `${Math.floor(leg.duration_minutes / 60)}h ${String(leg.duration_minutes % 60).padStart(2, "0")}m` : "Duration unavailable",
+                fare: leg.fare_inr ?? null,
+                seatClass: leg.class_code || "Class not provided",
+                stops: "Not provided",
+                statusText: leg.availability_status || "Availability not provided",
+                sourceLabel: leg.truth_level || "UNKNOWN",
+                fareSourceLabel: leg.fare_truth_level || "UNKNOWN",
                 thumbnail: "/images/train_card.jpg",
-                isVerified: true,
+                isVerified: ["OFFICIAL_TIMETABLE", "COMMUNITY_GTFS", "LIVE_API"].includes(leg.truth_level),
               });
             }
           }
@@ -223,6 +243,7 @@ export function SearchHero() {
           return Array.from(trainMap.values());
         }
       }
+      return [];
 
       if (isHydMas) {
         return [
@@ -444,20 +465,22 @@ export function SearchHero() {
               busMap.set(leg.service_number, {
                 id: `bus-${leg.service_number}`,
                 mode: "bus",
-                operator: leg.operator || "State RTC",
+                operator: leg.operator || "Operator not provided",
                 serviceNumber: leg.service_number,
-                serviceName: leg.service_name || "Express Bus",
-                fromStation: leg.from_station_name || `${fromCity} Central Bus Stand`,
-                toStation: leg.to_station_name || `${toCity} Central Bus Stand`,
-                depTime: `${leg.departure_time ? leg.departure_time.slice(0, 5) : "20:00"} – ${leg.arrival_time ? leg.arrival_time.slice(0, 5) : "06:00"}`,
-                arrTime: leg.arrival_time ? leg.arrival_time.slice(0, 5) : "06:00",
-                duration: `${Math.floor((leg.duration_minutes || 480) / 60)}h ${(leg.duration_minutes || 480) % 60}m · Direct`,
-                fare: leg.fare_inr || 650,
-                seatClass: leg.class_code || "Super Luxury 2+2",
-                stops: "Direct Highway",
-                statusText: "Guaranteed Seat",
+                serviceName: leg.service_name || "Service name unavailable",
+                fromStation: leg.from_station_name || "Station unavailable",
+                toStation: leg.to_station_name || "Station unavailable",
+                depTime: `${leg.departure_time ? leg.departure_time.slice(0, 5) : "Time unavailable"} – ${leg.arrival_time ? leg.arrival_time.slice(0, 5) : "Time unavailable"}`,
+                arrTime: leg.arrival_time ? leg.arrival_time.slice(0, 5) : "Time unavailable",
+                duration: leg.duration_minutes != null ? `${Math.floor(leg.duration_minutes / 60)}h ${String(leg.duration_minutes % 60).padStart(2, "0")}m` : "Duration unavailable",
+                fare: leg.fare_inr ?? null,
+                seatClass: leg.class_code || "Class not provided",
+                stops: "Not provided",
+                statusText: leg.availability_status || "Availability not provided",
+                sourceLabel: leg.truth_level || "UNKNOWN",
+                fareSourceLabel: leg.fare_truth_level || "UNKNOWN",
                 thumbnail: "/images/bus_card.jpg",
-                isVerified: true,
+                isVerified: ["OFFICIAL_TIMETABLE", "COMMUNITY_GTFS", "LIVE_API"].includes(leg.truth_level),
               });
             }
           }
@@ -467,6 +490,7 @@ export function SearchHero() {
           return Array.from(busMap.values());
         }
       }
+      return [];
 
       // Verified corridor buses
       if (isHydMas) {
@@ -769,20 +793,22 @@ export function SearchHero() {
               flightMap.set(leg.service_number, {
                 id: `flight-${leg.service_number}`,
                 mode: "flight",
-                operator: leg.operator || "IndiGo Aviation",
+                operator: leg.operator || "Operator not provided",
                 serviceNumber: leg.service_number,
-                serviceName: leg.service_name || "Non-Stop Flight",
-                fromStation: leg.from_station_name || `${fromCity} Airport`,
-                toStation: leg.to_station_name || `${toCity} Airport`,
-                depTime: `${leg.departure_time ? leg.departure_time.slice(0, 5) : "08:00"} – ${leg.arrival_time ? leg.arrival_time.slice(0, 5) : "09:30"}`,
-                arrTime: leg.arrival_time ? leg.arrival_time.slice(0, 5) : "09:30",
-                duration: `${Math.floor((leg.duration_minutes || 90) / 60)}h ${(leg.duration_minutes || 90) % 60}m · Non-Stop`,
-                fare: leg.fare_inr || 3450,
-                seatClass: leg.class_code || "Economy Standard",
-                stops: "Direct Non-Stop",
-                statusText: leg.truth_level === "LIVE_API" ? "Live AirLabs API" : "Confirmed Schedule",
+                serviceName: leg.service_name || "Service name unavailable",
+                fromStation: leg.from_station_name || "Airport unavailable",
+                toStation: leg.to_station_name || "Airport unavailable",
+                depTime: `${leg.departure_time ? leg.departure_time.slice(0, 5) : "Time unavailable"} – ${leg.arrival_time ? leg.arrival_time.slice(0, 5) : "Time unavailable"}`,
+                arrTime: leg.arrival_time ? leg.arrival_time.slice(0, 5) : "Time unavailable",
+                duration: leg.duration_minutes != null ? `${Math.floor(leg.duration_minutes / 60)}h ${String(leg.duration_minutes % 60).padStart(2, "0")}m` : "Duration unavailable",
+                fare: leg.fare_inr ?? null,
+                seatClass: leg.class_code || "Class not provided",
+                stops: "Not provided",
+                statusText: leg.availability_status || "Availability not provided",
+                sourceLabel: leg.truth_level || "UNKNOWN",
+                fareSourceLabel: leg.fare_truth_level || "UNKNOWN",
                 thumbnail: "/images/flight_card.jpg",
-                isVerified: true,
+                isVerified: ["OFFICIAL_TIMETABLE", "COMMUNITY_GTFS", "LIVE_API"].includes(leg.truth_level),
               });
             }
           }
@@ -792,6 +818,7 @@ export function SearchHero() {
           return Array.from(flightMap.values());
         }
       }
+      return [];
 
       // Verified commercial airport pairs
       if (isHydMas) {
@@ -1013,33 +1040,39 @@ export function SearchHero() {
       "Most Reliable": "bg-indigo-50 text-indigo-700 border-indigo-200",
     };
 
-    const durationMins = itin.total_duration_minutes || 360;
+    const durationMins = itin.total_duration_minutes;
     const durH = Math.floor(durationMins / 60);
     const durM = durationMins % 60;
-    const durStr = `${durH}h ${durM.toString().padStart(2, "0")}m`;
+    const durStr = durationMins != null
+      ? `${durH}h ${durM.toString().padStart(2, "0")}m`
+      : "Duration unavailable";
 
     const mappedLegs: DemoLeg[] = (itin.legs || []).map((leg: any) => ({
-      mode: (leg.mode as "rail" | "bus" | "flight") || "rail",
-      operator: leg.operator || "Indian Railways (SCR)",
-      serviceNumber: leg.service_number || "EXP",
-      serviceName: leg.service_name || "Express",
-      fromStation: leg.from_station_name || fromCity,
-      fromCode: leg.from_station_code || fromCode,
-      toStation: leg.to_station_name || toCity,
-      toCode: leg.to_station_code || toCode,
-      depTime: leg.departure_time ? leg.departure_time.slice(0, 5) : "06:00",
-      arrTime: leg.arrival_time ? leg.arrival_time.slice(0, 5) : "12:00",
-      duration: `${Math.floor((leg.duration_minutes || 360) / 60)}h ${((leg.duration_minutes || 360) % 60).toString().padStart(2, "0")}m`,
-      fare: leg.fare_inr ?? 320,
-      fareTruth: (leg.truth_level as any) || "OFFICIAL_TIMETABLE",
-      scheduleTruth: (leg.truth_level as any) || "OFFICIAL_TIMETABLE",
-      status: leg.availability_status ? `${leg.availability_status} (${leg.class_code || "SL"})` : "CNF Confirmed",
-      statusChance: leg.confirmation_probability ? `${Math.round(leg.confirmation_probability * 100)}%` : "High",
-      quotaDetails: `${leg.class_code || "Sleeper"} Class · General Quota`,
-      platform: `Platform ${((parseInt(leg.service_number, 10) || 1) % 6) + 1}`,
+      mode: leg.mode || "rail",
+      operator: leg.operator || "Operator unavailable",
+      serviceNumber: leg.service_number || "Service number unavailable",
+      serviceName: leg.service_name || "Service name unavailable",
+      fromStation: leg.from_station_name || "Station unavailable",
+      fromCode: leg.from_station_code || "—",
+      toStation: leg.to_station_name || "Station unavailable",
+      toCode: leg.to_station_code || "—",
+      depTime: leg.departure_time ? leg.departure_time.slice(0, 5) : "Time unavailable",
+      arrTime: leg.arrival_time ? leg.arrival_time.slice(0, 5) : "Time unavailable",
+      duration: leg.duration_minutes != null
+        ? `${Math.floor(leg.duration_minutes / 60)}h ${String(leg.duration_minutes % 60).padStart(2, "0")}m`
+        : "Duration unavailable",
+      fare: leg.fare_inr ?? null,
+      fareTruth: leg.fare_truth_level || "UNKNOWN",
+      scheduleTruth: leg.truth_level || "UNKNOWN",
+      status: leg.availability_status || "Availability not provided",
+      statusChance: leg.confirmation_probability != null
+        ? `${Math.round(leg.confirmation_probability * 100)}% estimate`
+        : undefined,
+      quotaDetails: leg.class_code ? `${leg.class_code} class` : "Class not provided",
+      platform: undefined,
     }));
 
-    const totalFare = itin.total_fare_inr ?? (mappedLegs[0]?.fare || 350);
+    const totalFare = itin.total_fare_inr ?? null;
 
     return {
       id: itin.id || `itin-${tag.toLowerCase().replace(" ", "-")}`,
@@ -1047,66 +1080,65 @@ export function SearchHero() {
       tagColor: tagColorMap[tag],
       totalDuration: durStr,
       totalFareKnown: totalFare,
-      unknownLegCount: 0,
-      estimatedTotalFare: totalFare,
-      departureTime: itin.departure_time ? itin.departure_time.slice(0, 5) : "06:00",
-      arrivalTime: itin.arrival_time ? itin.arrival_time.slice(0, 5) : "14:00",
-      smartNudge: itin.badges && itin.badges.length > 0 ? itin.badges.join(" · ") : `Verified schedule with ${mappedLegs.length} direct leg.`,
+      unknownLegCount: mappedLegs.filter((leg) => leg.fare === null).length,
+      estimatedTotalFare: totalFare ?? 0,
+      departureTime: itin.departure_time ? itin.departure_time.slice(0, 5) : "Time unavailable",
+      arrivalTime: itin.arrival_time ? itin.arrival_time.slice(0, 5) : "Time unavailable",
+      smartNudge: itin.badges && itin.badges.length > 0 ? itin.badges.join(" · ") : "No route-specific explanation provided.",
       whyThis: tag === "Fastest"
-        ? `Fastest connection taking only ${durStr} with 0% platform markup.`
+        ? `Shortest duration among the routes returned (${durStr}).`
         : tag === "Cheapest"
-        ? `Most economical option at ₹${totalFare} with 0% hidden convenience fee.`
+        ? totalFare !== null ? `Lowest known fare among the routes returned: ₹${totalFare}.` : "Fare is unknown for this route."
         : tag === "Most Reliable"
-        ? `Highest historical on-time performance (${Math.round((itin.overall_reliability_score || 0.95) * 100)}% punctuality).`
-        : `Optimal balance of speed (${durStr}) and official tariff (₹${totalFare}).`,
-      isBudgetVerified: itin.budget_verified ?? true,
-      reliabilityScore: itin.overall_reliability_score ?? 0.94,
+        ? `Reliability score reported by the planner: ${Math.round((itin.overall_reliability_score ?? 0) * 100)}%.`
+        : `Planner-selected balance for a ${durStr} journey.`,
+      isBudgetVerified: itin.budget_verified ?? false,
+      reliabilityScore: itin.overall_reliability_score ?? 0,
       fareBreakdown: {
-        baseFare: Math.round(totalFare * 0.85),
-        superfastCharges: 30,
-        reservationTaxes: 20,
-        busTariff: mappedLegs.some((l) => l.mode === "bus") ? totalFare : 0,
+        baseFare: 0,
+        superfastCharges: 0,
+        reservationTaxes: 0,
+        busTariff: 0,
         platformConvenienceMarkup: 0,
       },
       legs: mappedLegs,
       layover: itin.transfers && itin.transfers.length > 0 ? {
-        station: itin.transfers[0].from_station_code,
-        stationCode: itin.transfers[0].from_station_code,
+        station: itin.transfers[0].from_station_code || "Transfer station unavailable",
+        stationCode: itin.transfers[0].from_station_code || "—",
         duration: `${itin.transfers[0].buffer_minutes}m`,
         bufferMinutes: itin.transfers[0].buffer_minutes,
-        requiredWalkMinutes: 8,
+        requiredWalkMinutes: 0,
         transferType: (itin.transfers[0].transfer_type as any) || "same_station",
-        distanceMeters: 180,
+        distanceMeters: 0,
         safety: itin.transfers[0].safety_score >= 0.8 ? "Safe" : "Tight",
-        instructions: itin.transfers[0].notes || "Cross via foot overbridge with escalators.",
-        amenities: ["IRCTC Food Track", "Waiting Lounge", "Water Vending Machine"],
+        instructions: itin.transfers[0].notes || "Transfer instructions not provided.",
+        amenities: [],
       } : undefined,
     };
   };
 
   // Dynamic RAPTOR corridor data for active origin and destination
   const getCorridorData = (): Record<string, DemoItinerary> => {
-    // 1. If backend data is available, return dynamic itineraries from RAPTOR
-    if (backendPlanData) {
-      const best = backendPlanData.best_balance?.[0];
-      const fast = backendPlanData.fastest?.[0] || best;
-      const cheap = backendPlanData.cheapest?.[0] || best;
-      const rel = backendPlanData.most_reliable?.[0] || best;
-
-      if (best) {
-        return {
-          "Best Balance": mapBackendItinToDemo(best, "Best Balance"),
-          Fastest: mapBackendItinToDemo(fast, "Fastest"),
-          Cheapest: mapBackendItinToDemo(cheap, "Cheapest"),
-          "Most Reliable": mapBackendItinToDemo(rel, "Most Reliable"),
-        };
-      }
-    }
-
     const fLower = fromCity.toLowerCase();
     const tLower = toCity.toLowerCase();
     const isHydMas = fLower.includes("hyderabad") || tLower.includes("chennai") || fromCode === "HYB" || toCode === "MAS";
     const isHupGnt = fLower.includes("hindupur") || tLower.includes("guntur") || fromCode === "HUP" || toCode === "GNT";
+    if (!backendPlanData) return {};
+
+    // 1. If backend data is available, return dynamic itineraries from RAPTOR
+    if (backendPlanData) {
+      const best = backendPlanData.best_balance?.[0];
+      const fast = backendPlanData.fastest?.[0];
+      const cheap = backendPlanData.cheapest?.[0];
+      const reliable = backendPlanData.most_reliable?.[0];
+      const result: Record<string, DemoItinerary> = {};
+
+      if (best) result["Best Balance"] = mapBackendItinToDemo(best, "Best Balance");
+      if (fast) result.Fastest = mapBackendItinToDemo(fast, "Fastest");
+      if (cheap) result.Cheapest = mapBackendItinToDemo(cheap, "Cheapest");
+      if (reliable) result["Most Reliable"] = mapBackendItinToDemo(reliable, "Most Reliable");
+      return result;
+    }
 
     if (isHydMas) {
       return {
@@ -1763,6 +1795,7 @@ export function SearchHero() {
   ) => {
     if (e) e.preventDefault();
     setIsSearching(true);
+    setSearchError(null);
     const fCode = overrideFromCode || fromCode;
     const tCode = overrideToCode || toCode;
     const fCity = overrideFromCity || fromCity;
@@ -1770,24 +1803,27 @@ export function SearchHero() {
 
     try {
       // Connect live to FastAPI backend
-      const res = await fetch("http://localhost:8000/api/plan/sync", {
+      const res = await fetch(getPlanSearchUrl(process.env.NEXT_PUBLIC_API_URL), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          query: `${fCity} to ${tCity}`,
+          query: `${fCity} to ${tCity} on ${travelDate}`,
           overrides: {
             origin_code: fCode,
             destination_code: tCode,
+            date: travelDate,
           },
         }),
       });
 
-      if (res.ok) {
-        const data = await res.json();
-        setBackendPlanData(data);
+      if (!res.ok) {
+        throw new Error(`Search service returned HTTP ${res.status}.`);
       }
+      const data = await res.json();
+      setBackendPlanData(data);
     } catch (err) {
-      console.warn("Backend offline or unreachable, using verified local timetable data:", err);
+      setBackendPlanData(null);
+      setSearchError(err instanceof Error ? err.message : "The search service is unavailable.");
     } finally {
       setIsSearching(false);
       if (e) {
@@ -1833,21 +1869,20 @@ export function SearchHero() {
               {/* Pill badge */}
               <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200/80 text-xs font-semibold shadow-2xs">
                 <Sparkles className="w-3.5 h-3.5 text-blue-600" />
-                <span>Smarter Travel | Real-time | More Reliable</span>
+                <span>Multi-modal · Source-aware · Transparent</span>
               </div>
-
               {/* Bold headline */}
               <h1 className="text-4xl sm:text-5xl lg:text-[52px] font-extrabold text-slate-900 tracking-tight leading-[1.12]">
-                Travel without surprises across India.{" "}
+                Plan across India with the facts in view.{" "}
                 <span className="text-blue-600 block mt-1">
-                  Every train, bus, and flight — verified.
+                  Compare routes. See what is known.
                 </span>
               </h1>
 
               {/* Subtitle */}
               <p className="text-base sm:text-lg text-slate-600 max-w-xl font-normal leading-relaxed">
-                Get real-time information, transparent pricing, and trusted schedules — all in
-                one place. Plan your journey with confidence.
+                Compare available train, bus, and flight options with clear data-source labels.
+                Schedules, fares, and availability are shown only when the planner provides them.
               </p>
             </div>
 
@@ -1909,7 +1944,7 @@ export function SearchHero() {
 
                 <div className="hidden sm:flex items-center gap-2 text-xs text-slate-500 font-medium">
                   <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
-                  <span>0% Platform Markup Guaranteed</span>
+                  <span>Fare and source details shown when available</span>
                 </div>
               </div>
 
@@ -2046,10 +2081,10 @@ export function SearchHero() {
                       Date
                     </label>
                     <input
-                      type="text"
+                      type="date"
                       value={travelDate}
                       onChange={(e) => setTravelDate(e.target.value)}
-                      className="bg-transparent font-bold text-sm text-slate-900 focus:outline-hidden w-full truncate cursor-pointer"
+                      className="bg-transparent font-bold text-sm text-slate-900 focus:outline-hidden w-full truncate"
                     />
                   </div>
                 </div>
@@ -2163,7 +2198,7 @@ export function SearchHero() {
                     </>
                   ) : (
                     <>
-                      <span>Search Verified Routes</span>
+                      <span>Search Available Routes</span>
                       <ArrowRight className="w-4 h-4" />
                     </>
                   )}
@@ -2175,72 +2210,90 @@ export function SearchHero() {
                 <span className="font-semibold text-slate-400">Quick Corridors:</span>
                 <button
                   type="button"
-                  onClick={() => selectPresetCorridor("Vijayawada", "BZA", "Dharmavaram", "DMM", "Fri, 16 May 2025")}
+                  onClick={() => selectPresetCorridor("Vijayawada", "BZA", "Dharmavaram", "DMM", travelDate)}
                   className={`px-2.5 py-1 rounded-lg font-medium transition-colors ${
                     fromCode === "BZA" && toCode === "DMM"
                       ? "bg-blue-600 text-white font-bold"
                       : "bg-slate-100 hover:bg-blue-50 hover:text-blue-600 text-slate-700"
                   }`}
                 >
-                  Vijayawada → Dharmavaram (Train 17215 / APSRTC)
+                  Vijayawada → Dharmavaram
                 </button>
                 <button
                   type="button"
-                  onClick={() => selectPresetCorridor("Hyderabad", "HYB", "Chennai", "MAS", "Fri, 16 May 2025")}
+                  onClick={() => selectPresetCorridor("Hyderabad", "HYB", "Chennai", "MAS", travelDate)}
                   className={`px-2.5 py-1 rounded-lg font-medium transition-colors ${
                     fromCode === "HYB" && toCode === "MAS"
                       ? "bg-blue-600 text-white font-bold"
                       : "bg-slate-100 hover:bg-blue-50 hover:text-blue-600 text-slate-700"
                   }`}
                 >
-                  Hyderabad → Chennai (Charminar SF)
+                  Hyderabad → Chennai
                 </button>
                 <button
                   type="button"
-                  onClick={() => selectPresetCorridor("New Delhi", "NDLS", "Mumbai", "BCT", "Fri, 16 May 2025")}
+                  onClick={() => selectPresetCorridor("New Delhi", "NDLS", "Mumbai", "BCT", travelDate)}
                   className={`px-2.5 py-1 rounded-lg font-medium transition-colors ${
                     fromCode === "NDLS" && toCode === "BCT"
                       ? "bg-blue-600 text-white font-bold"
                       : "bg-slate-100 hover:bg-blue-50 hover:text-blue-600 text-slate-700"
                   }`}
                 >
-                  Delhi → Mumbai (Rajdhani)
+                  Delhi → Mumbai
                 </button>
                 <button
                   type="button"
-                  onClick={() => selectPresetCorridor("Hyderabad", "HYB", "Bengaluru", "SBC", "Fri, 16 May 2025")}
+                  onClick={() => selectPresetCorridor("Hyderabad", "HYB", "Bengaluru", "SBC", travelDate)}
                   className={`px-2.5 py-1 rounded-lg font-medium transition-colors ${
                     fromCode === "HYB" && toCode === "SBC"
                       ? "bg-blue-600 text-white font-bold"
                       : "bg-slate-100 hover:bg-blue-50 hover:text-blue-600 text-slate-700"
                   }`}
                 >
-                  Hyderabad → Bengaluru (Vande Bharat)
+                  Hyderabad → Bengaluru
                 </button>
                 <button
                   type="button"
-                  onClick={() => selectPresetCorridor("Vijayawada", "BZA", "Dharmavaram", "DMM", "Fri, 16 May 2025")}
+                  onClick={() => selectPresetCorridor("Vijayawada", "BZA", "Dharmavaram", "DMM", travelDate)}
                   className={`px-2.5 py-1 rounded-lg font-medium transition-colors ${
                     fromCode === "BZA" && toCode === "DMM"
                       ? "bg-blue-600 text-white font-bold"
                       : "bg-slate-100 hover:bg-blue-50 hover:text-blue-600 text-slate-700"
                   }`}
                 >
-                  Vijayawada → Dharmavaram (Train 17215)
+                  Vijayawada → Dharmavaram
                 </button>
                 <button
                   type="button"
-                  onClick={() => selectPresetCorridor("Hindupur", "HUP", "Guntur", "GNT", "Fri, 16 May 2025")}
+                  onClick={() => selectPresetCorridor("Hindupur", "HUP", "Guntur", "GNT", travelDate)}
                   className={`px-2.5 py-1 rounded-lg font-medium transition-colors ${
                     fromCode === "HUP" && toCode === "GNT"
                       ? "bg-blue-600 text-white font-bold"
                       : "bg-slate-100 hover:bg-blue-50 hover:text-blue-600 text-slate-700"
                   }`}
                 >
-                  Hindupur → Guntur (Feeder Bus + Rail)
+                  Hindupur → Guntur
                 </button>
               </div>
             </div>
+          </div>
+
+          <div aria-live="polite" className="mt-4">
+            {isSearching ? (
+              <p className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800">
+                Searching available timetable data for {fromCity} to {toCity}…
+              </p>
+            ) : searchError ? (
+              <p role="alert" className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">
+                Search failed: {searchError}. Check that the backend is running, then try again.
+              </p>
+            ) : backendPlanData ? (
+              <p className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
+                {backendPlanData.total_itineraries > 0
+                  ? `The planner found ${backendPlanData.total_itineraries} itinerary options. Scroll down to compare routes and data sources.`
+                  : "The planner returned no itinerary options for this trip and date. Try another date or route."}
+              </p>
+            ) : null}
           </div>
 
           {/* =========================================================================
@@ -2252,8 +2305,8 @@ export function SearchHero() {
               <div className="w-14 h-14 rounded-full bg-emerald-100/90 text-emerald-600 flex items-center justify-center mb-3 shadow-xs group-hover:scale-110 transition-transform duration-200">
                 <ShieldCheck className="w-7 h-7" />
               </div>
-              <h3 className="font-bold text-sm sm:text-base text-slate-900">Verified Routes</h3>
-              <p className="text-xs text-slate-500 mt-0.5">Real data, not guesses</p>
+              <h3 className="font-bold text-sm sm:text-base text-slate-900">Source-labelled routes</h3>
+              <p className="text-xs text-slate-500 mt-0.5">See what each source reports</p>
             </div>
 
             {/* Pillar 2: Transparent Pricing */}
@@ -2262,7 +2315,7 @@ export function SearchHero() {
                 ₹
               </div>
               <h3 className="font-bold text-sm sm:text-base text-slate-900">Transparent Pricing</h3>
-              <p className="text-xs text-slate-500 mt-0.5">No hidden markups</p>
+              <p className="text-xs text-slate-500 mt-0.5">Unknown fares stay unknown</p>
             </div>
 
             {/* Pillar 3: Smart Layovers */}
@@ -2279,8 +2332,8 @@ export function SearchHero() {
               <div className="w-14 h-14 rounded-full bg-violet-100/90 text-violet-600 flex items-center justify-center mb-3 shadow-xs group-hover:scale-110 transition-transform duration-200">
                 <Star className="w-7 h-7" />
               </div>
-              <h3 className="font-bold text-sm sm:text-base text-slate-900">RAPTOR Live</h3>
-              <p className="text-xs text-slate-500 mt-0.5">Live data & updates</p>
+              <h3 className="font-bold text-sm sm:text-base text-slate-900">Multi-modal planner</h3>
+              <p className="text-xs text-slate-500 mt-0.5">Compare available trip options</p>
             </div>
           </div>
         </div>
@@ -2345,7 +2398,7 @@ export function SearchHero() {
                   </div>
                   <h4 className="font-bold text-sm text-slate-900 mb-1">We check real options</h4>
                   <p className="text-xs text-slate-500 leading-relaxed">
-                    Live data, multiple modes, verified routes, best matches.
+                    Available provider and timetable data, ranked across travel modes.
                   </p>
                 </div>
 
@@ -2377,7 +2430,7 @@ export function SearchHero() {
                   </div>
                   <h4 className="font-bold text-sm text-slate-900 mb-1">Travel with confidence</h4>
                   <p className="text-xs text-slate-500 leading-relaxed">
-                    Get your ticket, route details, and real-time updates.
+                    Review the route details and continue to the relevant provider.
                   </p>
                 </div>
               </div>
@@ -2398,10 +2451,12 @@ export function SearchHero() {
                 Popular Routes
               </span>
               <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
-                Verified Routes: {fromCity} ({fromCode}) → {toCity} ({toCode})
+                Available Services: {fromCity} ({fromCode}) → {toCity} ({toCode})
               </h2>
               <p className="text-slate-600 text-xs sm:text-sm mt-1">
-                Showing live verified {verifiedRoutesTab === "rail" ? "trains" : verifiedRoutesTab === "bus" ? "buses" : "flights"} for this route.
+                {verifiedRoutes.length
+                  ? `Planner-returned options; check the separate schedule and fare source labels. Update timestamps are not currently supplied.`
+                  : `No ${verifiedRoutesTab === "rail" ? "train" : verifiedRoutesTab === "bus" ? "bus" : "flight"} options returned for this route yet.`}
               </p>
             </div>
 
@@ -2501,21 +2556,27 @@ export function SearchHero() {
                 {/* Fare */}
                 <div className="text-left md:text-right">
                   <div className="font-extrabold text-base text-slate-900">
-                    {route.fare !== null ? `₹ ${route.fare}` : "₹ Unverified"}
+                    {route.fare !== null ? `₹ ${route.fare}` : "Fare unknown"}
                   </div>
-                  <div className="text-xs text-slate-500">{route.seatClass}</div>
+                  <div className="text-xs text-slate-500">
+                    {route.seatClass} · Fare: {route.fareSourceLabel || "UNKNOWN"}
+                  </div>
                 </div>
 
                 {/* Badge & Action */}
                 <div className="flex items-center justify-between md:justify-end gap-3 pt-2 md:pt-0 border-t md:border-t-0 border-slate-100">
-                  <span className="px-3 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-xs font-semibold">
-                    Verified
+                  <span className={`px-3 py-1 rounded-full border text-xs font-semibold ${
+                    route.isVerified
+                      ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                      : "bg-amber-50 text-amber-800 border-amber-200"
+                  }`}>
+                  {route.sourceLabel || "UNKNOWN"}
                   </span>
                   <button
                     type="button"
                     onClick={() => {
-                      const itin = itineraries[activeTab] || itineraries["Best Balance"];
-                      setAuditModalItin(itin);
+                      const itin = itineraries[activeTab] || Object.values(itineraries)[0];
+                      if (itin) setAuditModalItin(itin);
                     }}
                     className="px-4 py-1.5 rounded-full border border-blue-300 text-blue-600 hover:bg-blue-50 text-xs font-bold transition-colors inline-flex items-center gap-1 cursor-pointer"
                   >
@@ -2564,6 +2625,7 @@ export function SearchHero() {
           </div>
 
           {/* Active Tab Detailed Card */}
+          {currentItin ? (
           <div className="bg-[#FAFCFF] rounded-3xl border border-blue-100 p-6 md:p-8 space-y-6">
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
               <div className="space-y-1">
@@ -2588,8 +2650,10 @@ export function SearchHero() {
                     <span className="text-amber-600 text-lg">⚠️ Budget Unverified</span>
                   )}
                 </div>
-                <div className="text-[11px] text-emerald-600 font-medium">
-                  0% platform markup · Official Tariff
+                <div className="text-[11px] text-slate-500 font-medium">
+                  {currentItin.unknownLegCount > 0
+                    ? `${currentItin.unknownLegCount} leg fare${currentItin.unknownLegCount === 1 ? "" : "s"} unknown`
+                    : "Fare total reported by the planner"}
                 </div>
               </div>
             </div>
@@ -2602,8 +2666,10 @@ export function SearchHero() {
                     <div className="flex items-center gap-2">
                       {leg.mode === "rail" ? (
                         <Train className="w-5 h-5 text-blue-600" />
-                      ) : (
+                      ) : leg.mode === "bus" ? (
                         <Bus className="w-5 h-5 text-emerald-600" />
+                      ) : (
+                        <Plane className="w-5 h-5 text-sky-600" />
                       )}
                       <div>
                         <span className="font-bold text-sm text-slate-900">
@@ -2616,11 +2682,11 @@ export function SearchHero() {
                     </div>
 
                     <div className="flex items-center gap-2">
-                      <span className="px-2.5 py-0.5 rounded-md bg-emerald-50 text-emerald-700 border border-emerald-200 text-[11px] font-semibold">
+                      <span className="px-2.5 py-0.5 rounded-md bg-slate-50 text-slate-700 border border-slate-200 text-[11px] font-semibold">
                         {leg.scheduleTruth}
                       </span>
                       <span className="text-xs font-bold text-slate-900">
-                        {leg.fare !== null ? `₹ ${leg.fare}` : "Fare Unknown on Feeder"}
+                        {leg.fare !== null ? `₹ ${leg.fare}` : "Fare unknown"}
                       </span>
                     </div>
                   </div>
@@ -2642,7 +2708,7 @@ export function SearchHero() {
                     </div>
                     <div>
                       <span className="text-slate-400 block">Status</span>
-                      <strong className="text-emerald-700 font-semibold">{leg.status}</strong>
+                      <strong className="text-slate-700 font-semibold">{leg.status}</strong>
                     </div>
                   </div>
                 </div>
@@ -2677,7 +2743,7 @@ export function SearchHero() {
             <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-4 border-t border-slate-200">
               <div className="flex items-center gap-3 text-xs text-slate-500">
                 <ShieldCheck className="w-4 h-4 text-emerald-600" />
-                <span>Deterministic RAPTOR verified timetable · No AI hallucinations</span>
+                <span>Route facts and data confidence are shown per leg.</span>
               </div>
 
               <div className="flex items-center gap-3 w-full sm:w-auto">
@@ -2686,7 +2752,7 @@ export function SearchHero() {
                   onClick={() => setAuditModalItin(currentItin)}
                   className="flex-1 sm:flex-none px-4 py-2 rounded-full border border-slate-300 hover:border-slate-400 text-slate-700 text-xs font-bold transition-colors cursor-pointer"
                 >
-                  Inspect Fare Formula
+                  Inspect fare sources
                 </button>
                 <a
                   href="https://www.irctc.co.in"
@@ -2700,6 +2766,25 @@ export function SearchHero() {
               </div>
             </div>
           </div>
+          ) : (
+            <div className="rounded-3xl border border-slate-200 bg-slate-50 p-8 text-center">
+              <h4 className="font-bold text-slate-900">
+                {isSearching ? "Checking available route data…" : searchError ? "Search could not be completed" : "No route options to show"}
+              </h4>
+              <p className="mx-auto mt-2 max-w-xl text-sm text-slate-600">
+                {searchError
+                  ? searchError
+                  : isSearching
+                  ? "Results will appear here when the planner responds."
+                  : backendPlanData
+                  ? "The planner returned no matching itineraries for this journey and date."
+                  : "Submit a search to check the planner."}
+              </p>
+              <p className="mt-2 text-xs text-slate-500">
+                No sample or fallback itineraries are shown.
+              </p>
+            </div>
+          )}
         </div>
       </section>
 
@@ -2731,10 +2816,10 @@ export function SearchHero() {
                   </div>
                   <div>
                     <h4 className="font-bold text-xs sm:text-sm text-slate-900">
-                      Real-time verified information
+                      Source-labelled route information
                     </h4>
                     <p className="text-[11px] text-slate-500 mt-0.5">
-                      Powered by trusted sources.
+                      Source and confidence labels are shown where provided.
                     </p>
                   </div>
                 </div>
@@ -2745,10 +2830,10 @@ export function SearchHero() {
                   </div>
                   <div>
                     <h4 className="font-bold text-xs sm:text-sm text-slate-900">
-                      Accurate & transparent fares
+                      Fare details with clear uncertainty
                     </h4>
                     <p className="text-[11px] text-slate-500 mt-0.5">
-                      No hidden charges.
+                      Unknown fares are not treated as zero.
                     </p>
                   </div>
                 </div>
@@ -2795,30 +2880,24 @@ export function SearchHero() {
             </div>
 
             <div className="space-y-3 text-xs">
-              <div className="flex justify-between py-2 border-b border-slate-100">
-                <span className="text-slate-600">Base Coaching Tariff (Indian Railways):</span>
-                <span className="font-bold text-slate-900">₹ {auditModalItin.fareBreakdown.baseFare}</span>
-              </div>
-              <div className="flex justify-between py-2 border-b border-slate-100">
-                <span className="text-slate-600">Superfast Supplementary Charge:</span>
-                <span className="font-bold text-slate-900">₹ {auditModalItin.fareBreakdown.superfastCharges}</span>
-              </div>
-              <div className="flex justify-between py-2 border-b border-slate-100">
-                <span className="text-slate-600">Statutory Reservation & GST:</span>
-                <span className="font-bold text-slate-900">₹ {auditModalItin.fareBreakdown.reservationTaxes}</span>
-              </div>
-              <div className="flex justify-between py-2 border-b border-slate-100">
-                <span className="text-slate-600">ZeroFriction Platform Markup:</span>
-                <span className="font-extrabold text-emerald-600">₹ 0 (0% Guaranteed)</span>
-              </div>
+              {auditModalItin.legs.map((leg, index) => (
+                <div key={`${leg.serviceNumber}-${index}`} className="flex justify-between gap-4 py-2 border-b border-slate-100">
+                  <span className="text-slate-600">
+                    {leg.serviceName} · {leg.fareTruth}
+                  </span>
+                  <span className="font-bold text-slate-900">
+                    {leg.fare === null ? "Fare unavailable" : `₹ ${leg.fare}`}
+                  </span>
+                </div>
+              ))}
               <div className="flex justify-between py-2.5 text-sm font-extrabold text-slate-900 bg-slate-50 px-3 rounded-xl">
-                <span>Verified Total Payable:</span>
-                <span>₹ {auditModalItin.totalFareKnown}</span>
+                <span>Planner-reported total:</span>
+                <span>{auditModalItin.totalFareKnown === null ? "Unknown" : `₹ ${auditModalItin.totalFareKnown}`}</span>
               </div>
             </div>
 
             <p className="text-[11px] text-slate-500 leading-relaxed">
-              * Fares comply strictly with Indian Railways Coaching Tariff No. 26 Part I and APSRTC published stage slabs. ZeroFriction will never mark up ticket prices or conceal charges.
+              Fare values and source labels are reported by the planner. Unknown amounts are not treated as zero, and this breakdown does not confirm booking availability or final payable charges.
             </p>
 
             <button

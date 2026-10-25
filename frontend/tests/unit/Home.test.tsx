@@ -1,58 +1,88 @@
-import { render, screen, fireEvent } from "@testing-library/react";
-import { describe, it, expect, vi } from "vitest";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import HomePage from "@/app/page";
+import { getPlanSearchUrl } from "@/components/search/SearchHero";
 
-// Mock next/navigation useRouter
-vi.mock("next/navigation", () => ({
-  useRouter: () => ({
-    push: vi.fn(),
-  }),
-}));
+const mockFetch = vi.fn();
 
-describe("HomePage Component", () => {
-  it("renders the primary headline, textarea, and submit button", () => {
-    render(<HomePage />);
+const emptyPlanResponse = {
+  best_balance: [],
+  cheapest: [],
+  fastest: [],
+  most_reliable: [],
+};
 
-    expect(screen.getByText(/Tell us where/i)).toBeInTheDocument();
-    expect(screen.getByText(/We'll sort the how/i)).toBeInTheDocument();
-
-    const input = screen.getByPlaceholderText(/Find me a combined train and bus route/i);
-    expect(input).toBeInTheDocument();
-
-    const submitBtn = screen.getByRole("button", { name: /Plan my trip/i });
-    expect(submitBtn).toBeInTheDocument();
-    expect(submitBtn).toBeDisabled(); // Disabled when empty
+describe("HomePage", () => {
+  it("normalizes API URLs whether the configured base includes /api or not", () => {
+    expect(getPlanSearchUrl("http://localhost:8000/api")).toBe("http://localhost:8000/api/plan/sync");
+    expect(getPlanSearchUrl("https://api.example.test")).toBe("https://api.example.test/api/plan/sync");
   });
 
-  it("enables the submit button when text is entered", () => {
-    render(<HomePage />);
-
-    const input = screen.getByPlaceholderText(/Find me a combined train and bus route/i);
-    fireEvent.change(input, { target: { value: "Hyderabad to Chennai Friday" } });
-
-    const submitBtn = screen.getByRole("button", { name: /Plan my trip/i });
-    expect(submitBtn).not.toBeDisabled();
+  beforeEach(() => {
+    Object.defineProperty(Element.prototype, "scrollIntoView", {
+      configurable: true,
+      value: vi.fn(),
+    });
+    mockFetch.mockReset();
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: async () => emptyPlanResponse,
+    });
+    vi.stubGlobal("fetch", mockFetch);
   });
 
-  it("populates query when clicking an example chip", () => {
-    render(<HomePage />);
-
-    const chips = screen.getAllByRole("button");
-    const exampleChip = chips.find((btn) => btn.textContent?.includes("Hyderabad to Chennai"));
-    expect(exampleChip).toBeDefined();
-
-    if (exampleChip) {
-      fireEvent.click(exampleChip);
-      const input = screen.getByPlaceholderText(/Find me a combined train and bus route/i) as HTMLTextAreaElement;
-      expect(input.value).toContain("Hyderabad to Chennai");
-    }
+  afterEach(() => {
+    cleanup();
+    vi.unstubAllGlobals();
   });
 
-  it("renders the trust strip guarantees", () => {
+  it("shows the source-aware route planner", () => {
     render(<HomePage />);
 
-    expect(screen.getByText("Real timetables")).toBeInTheDocument();
-    expect(screen.getByText("No guessing")).toBeInTheDocument();
-    expect(screen.getByText("Pan-India scope")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 1, name: /plan across india/i })).toBeInTheDocument();
+    expect(screen.getByText("From")).toBeInTheDocument();
+    expect(screen.getByText("To")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /verifying gtfs graph|search available routes/i })).toBeInTheDocument();
+  });
+
+  it("sends the selected travel date with a route search", async () => {
+    const { container } = render(<HomePage />);
+    const searchButton = await screen.findByRole("button", { name: /search available routes/i });
+    const dateInput = container.querySelector('input[type="date"]');
+
+    expect(dateInput).not.toBeNull();
+    fireEvent.change(dateInput as HTMLInputElement, { target: { value: "2026-11-02" } });
+    fireEvent.click(searchButton);
+
+    await waitFor(() => expect(mockFetch).toHaveBeenCalledTimes(2));
+    const request = JSON.parse(mockFetch.mock.calls[1][1].body);
+    expect(request.query).toContain("2026-11-02");
+    expect(request.overrides.date).toBe("2026-11-02");
+  });
+
+  it("shows an honest empty state instead of sample routes", async () => {
+    render(<HomePage />);
+
+    expect(await screen.findByText("No route options to show")).toBeInTheDocument();
+    expect(screen.getByText(/no sample or fallback itineraries are shown/i)).toBeInTheDocument();
+  });
+
+  it("shows when planner options are available", async () => {
+    mockFetch.mockResolvedValue({
+      ok: true,
+      json: async () => ({ ...emptyPlanResponse, total_itineraries: 5 }),
+    });
+    render(<HomePage />);
+
+    expect(await screen.findByText(/found 5 itinerary options/i)).toBeInTheDocument();
+  });
+
+  it("surfaces backend failures without replacing them with sample data", async () => {
+    mockFetch.mockRejectedValue(new Error("Backend unavailable"));
+    render(<HomePage />);
+
+    expect(await screen.findByText("Search could not be completed")).toBeInTheDocument();
+    expect(screen.getByRole("alert")).toHaveTextContent("Backend unavailable");
+    expect(screen.getByText(/no sample or fallback itineraries are shown/i)).toBeInTheDocument();
   });
 });

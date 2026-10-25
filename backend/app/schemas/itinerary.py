@@ -30,7 +30,8 @@ class Leg(BaseModel):
     arrival_time: str = Field(..., description="HH:MM:SS or ISO string")
     duration_minutes: int
     fare_inr: float | None = Field(default=None, description="NULL-safe fare. None if unknown.")
-    truth_level: TruthLevel = "OFFICIAL_TIMETABLE"
+    truth_level: TruthLevel = "UNKNOWN"
+    fare_truth_level: TruthLevel = "UNKNOWN"
     class_code: str | None = None  # "SL", "3A", "2A", "CC", "EXP"
     availability_status: str | None = None  # "CNF", "RAC", "WL", "UNKNOWN"
     waitlist_position: int | None = None
@@ -58,13 +59,13 @@ class Itinerary(BaseModel):
     departure_time: str
     arrival_time: str
     total_fare_inr: float | None = Field(default=None, description="NULL-safe. None if any leg fare is unknown.")
-    is_fare_verified: bool = True
+    is_fare_verified: bool = False
     transfers_count: int = 0
     overall_reliability_score: float = 0.75
     balance_score: float = 0.0
     badges: list[str] = Field(default_factory=list)
     category_tags: list[str] = Field(default_factory=list)
-    budget_verified: bool = True
+    budget_verified: bool = False
 
 
 class ItineraryResponse(BaseModel):

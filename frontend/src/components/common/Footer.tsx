@@ -54,11 +54,11 @@ export function Footer() {
           </div>
         </div>
 
-        {/* Anti-Asymmetry Guarantee Strip */}
+        {/* Data transparency note */}
         <div className="pt-6 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-3 text-[11px] text-slate-500">
           <div className="flex items-center gap-1.5">
             <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
-            <span>Anti-Asymmetry Certified · Indian Railways & State Bus GTFS Timetables · 0% Platform Markup</span>
+            <span>Source labels are shown where available · Unknown fares are not treated as zero</span>
           </div>
           <div className="text-slate-400">
             &copy; 2026 ZeroFriction Transit. All rights reserved.

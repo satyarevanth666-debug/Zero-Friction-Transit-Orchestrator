@@ -61,9 +61,9 @@ export function Navbar() {
 
         {/* Right Actions */}
         <div className="hidden md:flex items-center gap-3">
-          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200/80 text-xs font-semibold shadow-2xs">
-            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-            <span>RAPTOR Live</span>
+          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-50 text-blue-700 border border-blue-200/80 text-xs font-semibold shadow-2xs">
+            <span className="w-2 h-2 rounded-full bg-blue-500"></span>
+            <span>Route planner</span>
           </div>
           <Link
             href="/login"
@@ -76,9 +76,9 @@ export function Navbar() {
 
         {/* Mobile menu button */}
         <div className="flex md:hidden items-center gap-2">
-          <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200/80 text-[11px] font-semibold">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-            <span>Live</span>
+          <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-blue-50 text-blue-700 border border-blue-200/80 text-[11px] font-semibold">
+            <span className="w-1.5 h-1.5 rounded-full bg-blue-500"></span>
+            <span>Plan</span>
           </div>
           <button
             type="button"

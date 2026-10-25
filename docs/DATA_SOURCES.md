@@ -12,6 +12,13 @@ No synthetic hallucinations of transport routes or schedules are ever displayed 
 5. **`USER_PROVIDED`**: Sourced from user input during the active session (e.g., "I see WL 12 on IRCTC").
 6. **`UNKNOWN`**: Data missing or unverified. Never defaulted to 0 or arbitrary numbers.
 
+Schedule provenance and fare provenance are tracked separately in itinerary legs:
+`truth_level` describes the schedule source, while `fare_truth_level` describes
+the fare source. A fare calculated from published rules is `ESTIMATED`; it does
+not change an official or community schedule label. An itinerary total is
+unknown if any leg fare is unknown, and an estimated total is not marked as a
+verified fare or budget match.
+
 ---
 
 ## 2. Configured Providers

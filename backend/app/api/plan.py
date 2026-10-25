@@ -84,7 +84,8 @@ def plan_sync(req: PlanRequest, db: Session = Depends(get_db)) -> ItineraryRespo
     fare_provider = EstimatedFareProvider()
     for itin in itineraries:
         total_fare = 0.0
-        all_verified = True
+        all_fares_known = True
+        all_fares_verified = True
         for leg in itin.legs:
             cls_code = leg.class_code or ("SL" if leg.mode == "rail" else "EXP")
             f = fare_provider.calculate_fare(
@@ -96,15 +97,27 @@ def plan_sync(req: PlanRequest, db: Session = Depends(get_db)) -> ItineraryRespo
             )
             if f is not None:
                 leg.fare_inr = f
-                leg.truth_level = "OFFICIAL_TIMETABLE" if leg.mode == "rail" else "COMMUNITY_GTFS"
+                leg.fare_truth_level = "ESTIMATED"
                 total_fare += f
             else:
-                all_verified = False
-        if total_fare > 0:
+                if leg.fare_inr is None:
+                    all_fares_known = False
+                else:
+                    total_fare += leg.fare_inr
+            if leg.fare_truth_level not in ("OFFICIAL_TIMETABLE", "LIVE_API"):
+                all_fares_verified = False
+
+        if itin.legs and all_fares_known:
             itin.total_fare_inr = total_fare
-            itin.is_fare_verified = all_verified
+            itin.is_fare_verified = all_fares_verified
             if intent.budget is not None:
-                itin.budget_verified = total_fare <= intent.budget
+                itin.budget_verified = all_fares_verified and total_fare <= intent.budget
+            else:
+                itin.budget_verified = False
+        else:
+            itin.total_fare_inr = None
+            itin.is_fare_verified = False
+            itin.budget_verified = False
     from app.config import settings
     from app.providers.rail_availability import RailAvailabilityProvider
     from app.providers.bus_availability import BusAvailabilityProvider
